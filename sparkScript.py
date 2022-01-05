@@ -5,11 +5,11 @@ import sys
 import re
 
 from pyspark.sql import functions as F
-from pyspark.sql.types import DoubleType
-from pyspark.sql.types import FloatType
+from pyspark.sql.types import StructType,StructField,FloatType,DoubleType,StringType,IntegerType
 from pyspark import SparkContext, SparkConf
 from pyspark.sql import SQLContext, Row
 from itertools import islice
+
 
 #Setup and Cluster configuration
 
@@ -33,31 +33,70 @@ def cleanse_address(x):
 pollutionData = sc.textFile("Measurement_summary.csv", minPartitions=repartition_count)
 pollutionData = pollutionData.mapPartitionsWithIndex(lambda i, iter: islice(iter, 1, None) if i == 0 else iter)
 
-test = pollutionData.take(3)
-print()
-print(test)
-print()
+#test = pollutionData.take(3)
+#print()
+#print(test)
+#print()
 
 # replace all commata in address strings with semicolons
-pollutionData = pollutionData.map(lambda x: cleanse_address(x))
+pollutionData = pollutionData.map(cleanse_address)
 
-test = pollutionData.take(3)
-print()
-print(test)
-print()
+#test = pollutionData.take(3)
+#print()
+#print(test)
+#print()
 
 pollutionData = pollutionData.map(lambda x: x.split(','))
-pollutionData = pollutionData.map(lambda x: (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10])).persist()
+pollutionData = pollutionData.map(lambda x: (x[0], int(x[1]), x[2], float(x[3]), float(x[4]), float(x[5]), float(x[6]), float(x[7]), float(x[8]), float(x[9]), float(x[10]))).persist()
 
-df = sqlContext.createDataFrame(pollutionData, ["date", "station", "address", "latitude", "longitude", "SO2", "NO2", "O3", "CO", "PM10", "PM2.5"])
+schema = StructType([ \
+    StructField("date",StringType(),False), \
+    StructField("station",IntegerType(),False), \
+    StructField("address",StringType(),False), \
+    StructField("latitude", FloatType(), False), \
+    StructField("longitude", FloatType(), False), \
+    StructField("SO2", FloatType(), False), \
+    StructField("NO2", FloatType(), False), \
+    StructField("O3", FloatType(), False), \
+    StructField("CO", FloatType(), False), \
+    StructField("PM10", FloatType(), False), \
+    StructField("PM2_5", FloatType(), False), \
+  ])
 
-test = df.take(5)
+df = sqlContext.createDataFrame(pollutionData, schema)
+
+#test = df.take(5)
+#print()
+#print(test)
+#print()
+
+#filterTestDF = df.filter(df.station == 101)
+#test = filterTestDF.take(5)
+#print()
+#print(test)
+#print()
+
+#First Analysis: average values per week
+
+weekDates = df.withColumn("date", F.weekofyear(F.to_date("date")))
+
+test = weekDates.take(3)
 print()
 print(test)
 print()
 
-filterTestDF = df.filter(df.station == 101)
-test = filterTestDF.take(5)
+# total averages per week
+totalWeekAverages = weekDates.groupBy("date").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+# averages per station per week
+weekAverages = weekDates.groupBy("date","station").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+
+test = totalWeekAverages.take(3)
 print()
 print(test)
 print()
+
+test = weekAverages.take(3)
+print()
+print(test)
+print()
+
