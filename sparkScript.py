@@ -5,7 +5,7 @@ import sys
 import re
 
 from pyspark.sql import functions as F
-from pyspark.sql.types import StructType,StructField,FloatType,DoubleType,StringType,IntegerType
+from pyspark.sql.types import TimestampType,StructType,StructField,FloatType,DoubleType,StringType,IntegerType
 from pyspark import SparkContext, SparkConf
 from pyspark.sql import SQLContext, Row
 from itertools import islice
@@ -47,7 +47,7 @@ pollutionData = pollutionData.map(cleanse_address)
 #print()
 
 pollutionData = pollutionData.map(lambda x: x.split(','))
-pollutionData = pollutionData.map(lambda x: (x[0], int(x[1]), x[2], float(x[3]), float(x[4]), float(x[5]), float(x[6]), float(x[7]), float(x[8]), float(x[9]), float(x[10]))).persist()
+pollutionData = pollutionData.map(lambda x: (x[0], int(x[1]), x[2], float(x[3]), float(x[4]), float(x[5]), float(x[6]), float(x[7]), float(x[8]), float(x[9]), float(x[10])))
 
 schema = StructType([ \
     StructField("date",StringType(),False), \
@@ -64,39 +64,90 @@ schema = StructType([ \
   ])
 
 df = sqlContext.createDataFrame(pollutionData, schema)
+df = df.withColumn("date", F.to_timestamp("date")).persist()
 
-#test = df.take(5)
-#print()
-#print(test)
-#print()
+test = df.take(2)
+print()
+print(test)
+print()
 
-#filterTestDF = df.filter(df.station == 101)
-#test = filterTestDF.take(5)
-#print()
-#print(test)
-#print()
+filterTestDF = df.filter(df.date > '2017-01-02')
+test = filterTestDF.take(2)
+print()
+print(test)
+print()
+
+
 
 #First Analysis: average values per week
 
-weekDates = df.withColumn("date", F.weekofyear(F.to_date("date")))
+weekDates = filterTestDF.withColumn("date", F.weekofyear("date"))
 
-test = weekDates.take(3)
-print()
-print(test)
-print()
+#test = weekDates.take(2)
+#print()
+#print(test)
+#print()
 
 # total averages per week
-totalWeekAverages = weekDates.groupBy("date").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+#totalWeekAverages = weekDates.groupBy("date").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 # averages per station per week
-weekAverages = weekDates.groupBy("date","station").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+#weekAverages = weekDates.groupBy("date","station").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 
-test = totalWeekAverages.take(3)
+#test = totalWeekAverages.take(3)
+#print()
+#print(test)
+#print()
+
+#test = weekAverages.take(3)
+#print()
+#print(test)
+#print()
+
+
+
+#Second Analysis: distribution of time spent in the different quality levels
+
+# first, read in the info about the quality levels
+
+infoRaw = sc.textFile("Original Data/Measurement_item_info.csv", minPartitions=repartition_count)
+infoRaw = infoRaw.mapPartitionsWithIndex(lambda i, iter: islice(iter, 1, None) if i == 0 else iter)
+
+infoRaw = infoRaw.map(lambda x: x.split(','))
+infoRaw = infoRaw.map(lambda x: (int(x[0]), x[1], x[2], float(x[3]), float(x[4]), float(x[5]), float(x[6])))
+
+schema = StructType([ \
+    StructField("item_code",IntegerType(),False), \
+    StructField("item_name",StringType(),False), \
+    StructField("unit",StringType(),False), \
+    StructField("good", FloatType(), False), \
+    StructField("normal", FloatType(), False), \
+    StructField("bad", FloatType(), False), \
+    StructField("very_bad", FloatType(), False), \
+  ])
+
+infoDF = sqlContext.createDataFrame(infoRaw, schema)
+
+# replace the item name "PM2.5" with "PM2_5" to match what we did earlier
+infoDF = infoDF.withColumn("item_name", F.regexp_replace("item_name", "PM2.5", "PM2_5"))
+
+# for each measurement for each item calculate the quality
+
+def calc_quality(df, infoDF, item_name):
+	levels = infoDF.filter(infoDF.item_name == item_name).take(1)
+	df = df.withColumn(item_name + "_quality", F.expr("""IF("""+ item_name +""" < """+ str(levels[0][3]) +""", 0, IF("""+ \
+                                                                     item_name +""" < """+ str(levels[0][4]) +""", 1, IF("""+ \
+                                                                     item_name +""" < """+ str(levels[0][5]) +""", 2, IF("""+ \
+                                                                     item_name +""" < """+ str(levels[0][6]) +""", 3, 4))))""") )
+	return df
+
+quality = calc_quality(df, infoDF, "SO2")
+quality = calc_quality(quality, infoDF, "NO2")
+quality = calc_quality(quality, infoDF, "O3")
+quality = calc_quality(quality, infoDF, "CO")
+quality = calc_quality(quality, infoDF, "PM10")
+quality = calc_quality(quality, infoDF, "PM2_5")
+
+test = quality.take(2)
 print()
 print(test)
 print()
-
-test = weekAverages.take(3)
-print()
-print(test)
-print()
-
