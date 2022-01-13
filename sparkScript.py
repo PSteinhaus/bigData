@@ -83,29 +83,25 @@ print()
 
 weekDates = filterTestDF.withColumn("date", F.weekofyear("date"))
 
-#test = weekDates.take(2)
-#print()
-#print(test)
-#print()
-
 # total averages per week
-#totalWeekAverages = weekDates.groupBy("date").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+grouped = weekDates.groupBy("date")
+totalWeekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+totalWeekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
+
+totalWeekAverages.show(10)
+totalWeekStdDeviations.show(10)
+
 # averages per station per week
-#weekAverages = weekDates.groupBy("date","station").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+grouped = weekDates.groupBy("date","station")
+weekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+weekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
-#test = totalWeekAverages.take(3)
-#print()
-#print(test)
-#print()
-
-#test = weekAverages.take(3)
-#print()
-#print(test)
-#print()
+weekAverages.show(4)
+weekStdDeviations.show(4)
 
 
 
-#Second Analysis: distribution of time spent in the different quality levels
+#Second Analysis: quality level for each data point
 
 # first, read in the info about the quality levels
 
@@ -147,7 +143,40 @@ quality = calc_quality(quality, infoDF, "CO")
 quality = calc_quality(quality, infoDF, "PM10")
 quality = calc_quality(quality, infoDF, "PM2_5")
 
-test = quality.take(2)
-print()
-print(test)
-print()
+
+
+#Third Analysis: percentage of time spent in each quality level per measured item, per station
+
+def q_percentage(qualityDF, item_name):
+	# count of datapoints per station
+	datapointCount = qualityDF.groupBy("station").count().withColumnRenamed("count", "totalCount")
+
+	# count of datapoints with a certain quality level, per station
+	qLevelCount = qualityDF.groupBy(item_name+"_quality", "station", "latitude", "longitude").count()
+	
+	# join them to make the next operation possible
+	qLevelCount = qLevelCount.join(datapointCount, "station")
+	
+	# divide count of datapoints with a certain quality level through total datapoint-count per station,
+	# to get the percentage of time spent in this quality level;
+	# add one column per quality level to the given dataframe
+	qLevelPercentages = qLevelCount.withColumn("percentage", F.col("count") / F.col("totalCount"))
+	
+	# keep latitude and longitude for easier visualization later
+	return qLevelPercentages.select("station", "latitude", "longitude", item_name+"_quality", "percentage");
+
+SO2percentages = q_percentage(quality, "SO2")
+NO2percentages = q_percentage(quality, "NO2")
+O3percentages = q_percentage(quality, "O3")
+COpercentages = q_percentage(quality, "CO")
+PM10percentages = q_percentage(quality, "PM10")
+PM2_5percentages = q_percentage(quality, "PM2_5")
+
+#SO2percentages.write.csv("SO2_level_percentages.csv")
+#NO2percentages.write.csv("NO2_level_percentages.csv")
+#O3percentages.write.csv("O3_level_percentages.csv")
+#COpercentages.write.csv("CO_level_percentages.csv")
+#PM10percentages.write.csv("PM10_level_percentages.csv")
+#PM2_5percentages.write.csv("PM2_5_level_percentages.csv")
+
+PM10percentages.show(3)
