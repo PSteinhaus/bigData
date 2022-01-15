@@ -55,53 +55,32 @@ schema = StructType([ \
     StructField("address",StringType(),False), \
     StructField("latitude", FloatType(), False), \
     StructField("longitude", FloatType(), False), \
-    StructField("SO2", FloatType(), False), \
-    StructField("NO2", FloatType(), False), \
-    StructField("O3", FloatType(), False), \
-    StructField("CO", FloatType(), False), \
-    StructField("PM10", FloatType(), False), \
-    StructField("PM2_5", FloatType(), False), \
+    StructField("SO2", FloatType(), True), \
+    StructField("NO2", FloatType(), True), \
+    StructField("O3", FloatType(), True), \
+    StructField("CO", FloatType(), True), \
+    StructField("PM10", FloatType(), True), \
+    StructField("PM2_5", FloatType(), True), \
   ])
 
+# first turn date strings to timestamps
 df = sqlContext.createDataFrame(pollutionData, schema)
 df = df.withColumn("date", F.to_timestamp("date")).persist()
 
-test = df.take(2)
-print()
-print(test)
-print()
-
-filterTestDF = df.filter(df.date > '2017-01-02')
-test = filterTestDF.take(2)
-print()
-print(test)
-print()
+# then set all measurement data that is -1 to null
+df = df.replace(-1,None)
 
 
 
-#First Analysis: average values per week
-
-weekDates = filterTestDF.withColumn("date", F.weekofyear("date"))
-
-# total averages per week
-grouped = weekDates.groupBy("date")
-totalWeekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
-totalWeekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
-
-totalWeekAverages.show(10)
-totalWeekStdDeviations.show(10)
-
-# averages per station per week
-grouped = weekDates.groupBy("date","station")
-weekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
-weekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
-
-weekAverages.show(4)
-weekStdDeviations.show(4)
+###################################################
+# Zeroth Analysis: give an overview over the data #
+###################################################
+#df.describe().show()
 
 
-
-#Second Analysis: quality level for each data point
+#####################################################
+# First Analysis: quality level for each data point #
+#####################################################
 
 # first, read in the info about the quality levels
 
@@ -133,10 +112,12 @@ def calc_quality(df, infoDF, item_name):
 	df = df.withColumn(item_name + "_quality", F.expr("""IF("""+ item_name +""" < """+ str(levels[0][3]) +""", 0, IF("""+ \
                                                                      item_name +""" < """+ str(levels[0][4]) +""", 1, IF("""+ \
                                                                      item_name +""" < """+ str(levels[0][5]) +""", 2, IF("""+ \
-                                                                     item_name +""" < """+ str(levels[0][6]) +""", 3, 4))))""") )
+                                                                     item_name +""" < """+ str(levels[0][6]) +""", 3, IF("""+ \
+                                                                     item_name +""" IS NULL, NULL, 4)))))""") )
 	return df
 
 quality = calc_quality(df, infoDF, "SO2")
+df.unpersist()
 quality = calc_quality(quality, infoDF, "NO2")
 quality = calc_quality(quality, infoDF, "O3")
 quality = calc_quality(quality, infoDF, "CO")
@@ -144,9 +125,60 @@ quality = calc_quality(quality, infoDF, "PM10")
 quality = calc_quality(quality, infoDF, "PM2_5")
 
 
+##########################################################################################
+# Bonus Analysis: show me the values that lie in quality level 4 (worse than "very bad") #
+##########################################################################################
+horrible = quality.filter(F.col("SO2_quality") == 4)
+#horrible.show(200)
+horrible = quality.filter(F.col("CO_quality") == 4)
+#horrible.show(200)
+horrible = quality.filter(F.col("O3_quality") == 4)
+#horrible.show(200)
+horrible = quality.filter(F.col("NO2_quality") == 4)
+#horrible.show(200)
+horrible = quality.filter(F.col("PM2_5_quality") == 4)
+#horrible.show(200)
+horrible = quality.filter(F.col("PM10_quality") == 4)
+#horrible.show(200)
 
-#Third Analysis: percentage of time spent in each quality level per measured item, per station
+# Result: quality level 4 seem to be measurement errors for Particulate Matter (PM), but might be legitimate for the other items (there are only a couple of such datapoints for each item though, so they don't matter really)
+#         -> therefore we set the values that lie in level 4 to null for PM
+quality = quality.withColumn("PM2_5", F.expr("""IF(PM2_5_quality == 4, NULL, PM2_5)"""))
+quality = quality.withColumn("PM10", F.expr("""IF(PM10_quality == 4, NULL, PM10)""")).persist()
 
+#quality.describe().show()
+
+
+############################################
+# Second Analysis: average values per week #
+############################################
+
+# preselection: select a certain year:
+firstInput = quality #.filter(F.year("date") == 2017)
+
+weekDates = firstInput.withColumn("date", F.weekofyear("date"))
+
+# total averages per week
+grouped = weekDates.groupBy("date")
+totalWeekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+totalWeekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
+
+totalWeekAverages.show(10)
+totalWeekStdDeviations.show(10)
+
+# averages per station per week
+grouped = weekDates.groupBy("date","station")
+weekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+weekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
+
+weekAverages.show(8)
+weekStdDeviations.show(8)
+
+
+#################################################################################################
+# Third Analysis: percentage of time spent in each quality level per measured item, per station #
+#################################################################################################
+"""
 def q_percentage(qualityDF, item_name):
 	# count of datapoints per station
 	datapointCount = qualityDF.groupBy("station").count().withColumnRenamed("count", "totalCount")
@@ -180,80 +212,4 @@ PM2_5percentages = q_percentage(quality, "PM2_5")
 #PM2_5percentages.write.csv("PM2_5_level_percentages.csv")
 
 PM10percentages.show(3)
-
-
-
-
-
-# Tagesverlauf
-
-# add column for hours
-dailyProgression = df.withColumn("hour", F.hour("date"))
-#print()
-#print(dailyProgression)
-#print()
-
-# total averages per week
-#totalHourAverages = dailyProgression.groupBy("hour").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
-# averages per station per week
-#hourAverages = dailyProgression.groupBy("hour","station").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
-
-#test = totalHourAverages.take(24)
-#print()
-#print(test)
-#print()
-
-
-
-
-
-# WIND
-
-# read wind data
-
-windData = sc.textFile("WindData.csv", minPartitions=repartition_count)
-windData = windData.mapPartitionsWithIndex(lambda i, iter: islice(iter, 5, None) if i == 0 else iter)
-
-windData = windData.map(lambda x: x.split(','))
-windData = windData.map(lambda x: (x[1], x[2], int(x[3]), int(x[4]), int(x[5]), int(x[6])))
-
-#location,measurement date and time,measurement period,average wind direction 1,average instantaneous wind speed 1,maximum wind angle,maximum wind speed
-
-#0   degrees = north
-#90  degrees = east
-#180 degrees = south
-#270 degrees = west
-
-windSchema = StructType([ \
-    StructField("date",StringType(),False), \
-    StructField("measurementPeriod",StringType(),False), \
-    StructField("averageWindDir",IntegerType(),False), \
-    StructField("averageInstWindSpeed",IntegerType(),False), \
-    StructField("maxWindAngle",IntegerType(),False), \
-    StructField("maxWindSpeed",IntegerType(),False), \
-  ])
-
-windDF = sqlContext.createDataFrame(windData, windSchema)
-windDF = windDF.withColumn("date", F.to_timestamp("date")).persist()
-
-test = windDF.take(2)
-#print()
-#print(test)
-#print()
-
-# we need hourly values
-#filterTestDF = df.filter(df.date > '2017-01-02')
-windDF = windDF.filter(windDF.measurementPeriod == "H")
-
-#test = windDF.take(2)
-#print()
-#print(test)
-#print()
-
-# beide dataframes in 1 dataframe packen
-joined_data = df.join(hourlyWindDF, df.date == hourlyWindDF.date)
-
-#test = joined_data.take(3)
-#print()
-#print(test)
-#print()
+"""
