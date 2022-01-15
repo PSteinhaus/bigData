@@ -31,20 +31,11 @@ def cleanse_address(x):
 	return x
 
 pollutionData = sc.textFile("Measurement_summary.csv", minPartitions=repartition_count)
+# skip the first line
 pollutionData = pollutionData.mapPartitionsWithIndex(lambda i, iter: islice(iter, 1, None) if i == 0 else iter)
-
-#test = pollutionData.take(3)
-#print()
-#print(test)
-#print()
 
 # replace all commata in address strings with semicolons
 pollutionData = pollutionData.map(cleanse_address)
-
-#test = pollutionData.take(3)
-#print()
-#print(test)
-#print()
 
 pollutionData = pollutionData.map(lambda x: x.split(','))
 pollutionData = pollutionData.map(lambda x: (x[0], int(x[1]), x[2], float(x[3]), float(x[4]), float(x[5]), float(x[6]), float(x[7]), float(x[8]), float(x[9]), float(x[10])))
@@ -163,16 +154,16 @@ grouped = weekDates.groupBy("date")
 totalWeekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 totalWeekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
-totalWeekAverages.show(10)
-totalWeekStdDeviations.show(10)
+#totalWeekAverages.show(10)
+#totalWeekStdDeviations.show(10)
 
 # averages per station per week
 grouped = weekDates.groupBy("date","station")
 weekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 weekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
-weekAverages.show(8)
-weekStdDeviations.show(8)
+#weekAverages.show(8)
+#weekStdDeviations.show(8)
 
 
 #################################################################################################
@@ -216,32 +207,39 @@ PM10percentages.show(3)
 
 
 
-
-
-
-# Tagesverlauf
+################
+# Tagesverlauf #
+################
 
 # add column for hours
-dailyProgression = df.withColumn("hour", F.hour("date"))
-#print()
-#print(dailyProgression)
-#print()
+dailyProgression = quality.withColumn("hour", F.hour("date")).persist()
+#dailyProgression.show(10)
+
+# pre-selection: select a certain year:
+#dailyProgression = dailyProgression.filter(F.year("date") == 2017)
 
 # total averages per week
-#totalHourAverages = dailyProgression.groupBy("hour").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+grouped = dailyProgression.groupBy("hour")
+totalHourAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+totalHourStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
+
+totalHourAverages.show(24)
+totalHourStdDeviations.show(24)
+
 # averages per station per week
-#hourAverages = dailyProgression.groupBy("hour","station").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+grouped = dailyProgression.groupBy("hour", "station")
+hourAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+hourStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
-#test = totalHourAverages.take(24)
-#print()
-#print(test)
-#print()
+hourAverages.show(24)
+hourStdDeviations.show(24)
+
+dailyProgression.unpersist()
 
 
-
-
-
-# WIND
+########
+# WIND #
+########
 
 # read wind data
 
@@ -268,26 +266,34 @@ windSchema = StructType([ \
   ])
 
 windDF = sqlContext.createDataFrame(windData, windSchema)
-windDF = windDF.withColumn("date", F.to_timestamp("date")).persist()
+windDF = windDF.withColumn("date", F.to_timestamp("date"))
 
-test = windDF.take(2)
-#print()
-#print(test)
-#print()
+#windDF.show(3)
 
 # we need hourly values
-#filterTestDF = df.filter(df.date > '2017-01-02')
 windDF = windDF.filter(windDF.measurementPeriod == "H")
 
-#test = windDF.take(2)
-#print()
-#print(test)
-#print()
+windDF.show(4)
+windDF.describe().show()
 
 # beide dataframes in 1 dataframe packen
-joined_data = df.join(hourlyWindDF, df.date == hourlyWindDF.date)
+joined_data = quality.join(windDF, "date").persist()
 
-#test = joined_data.take(3)
-#print()
-#print(test)
-#print()
+#joined_data.show(5)
+
+
+# calculate the correlation between average wind speed and pollutant concentration
+
+#SO2_corr = joined_data.stat.corr("averageInstWindSpeed", "SO2")
+#NO2_corr = joined_data.stat.corr("averageInstWindSpeed", "NO2")
+#CO_corr = joined_data.stat.corr("averageInstWindSpeed", "CO")
+#O3_corr = joined_data.stat.corr("averageInstWindSpeed", "O3")
+#PM2_5_corr = joined_data.stat.corr("averageInstWindSpeed", "PM2_5")
+#PM10_corr = joined_data.stat.corr("averageInstWindSpeed", "PM10")
+
+#print("SO2_corr: " + str(SO2_corr))
+#print("NO2_corr: " + str(NO2_corr))
+#print("CO_corr: " + str(CO_corr))
+#print("O3_corr: " + str(O3_corr))
+#print("PM2_5_corr: " + str(PM2_5_corr))
+#print("PM10_corr: " + str(PM10_corr))
