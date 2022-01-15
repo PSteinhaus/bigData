@@ -213,3 +213,81 @@ PM2_5percentages = q_percentage(quality, "PM2_5")
 
 PM10percentages.show(3)
 """
+
+
+
+
+
+
+# Tagesverlauf
+
+# add column for hours
+dailyProgression = df.withColumn("hour", F.hour("date"))
+#print()
+#print(dailyProgression)
+#print()
+
+# total averages per week
+#totalHourAverages = dailyProgression.groupBy("hour").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+# averages per station per week
+#hourAverages = dailyProgression.groupBy("hour","station").avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+
+#test = totalHourAverages.take(24)
+#print()
+#print(test)
+#print()
+
+
+
+
+
+# WIND
+
+# read wind data
+
+windData = sc.textFile("WindData.csv", minPartitions=repartition_count)
+windData = windData.mapPartitionsWithIndex(lambda i, iter: islice(iter, 5, None) if i == 0 else iter)
+
+windData = windData.map(lambda x: x.split(','))
+windData = windData.map(lambda x: (x[1], x[2], int(x[3]), int(x[4]), int(x[5]), int(x[6])))
+
+#location,measurement date and time,measurement period,average wind direction 1,average instantaneous wind speed 1,maximum wind angle,maximum wind speed
+
+#0   degrees = north
+#90  degrees = east
+#180 degrees = south
+#270 degrees = west
+
+windSchema = StructType([ \
+    StructField("date",StringType(),False), \
+    StructField("measurementPeriod",StringType(),False), \
+    StructField("averageWindDir",IntegerType(),False), \
+    StructField("averageInstWindSpeed",IntegerType(),False), \
+    StructField("maxWindAngle",IntegerType(),False), \
+    StructField("maxWindSpeed",IntegerType(),False), \
+  ])
+
+windDF = sqlContext.createDataFrame(windData, windSchema)
+windDF = windDF.withColumn("date", F.to_timestamp("date")).persist()
+
+test = windDF.take(2)
+#print()
+#print(test)
+#print()
+
+# we need hourly values
+#filterTestDF = df.filter(df.date > '2017-01-02')
+windDF = windDF.filter(windDF.measurementPeriod == "H")
+
+#test = windDF.take(2)
+#print()
+#print(test)
+#print()
+
+# beide dataframes in 1 dataframe packen
+joined_data = df.join(hourlyWindDF, df.date == hourlyWindDF.date)
+
+#test = joined_data.take(3)
+#print()
+#print(test)
+#print()
