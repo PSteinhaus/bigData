@@ -147,23 +147,40 @@ quality = quality.withColumn("PM10", F.expr("""IF(PM10_quality == 4, NULL, PM10)
 # preselection: select a certain year:
 firstInput = quality #.filter(F.year("date") == 2017)
 
-weekDates = firstInput.withColumn("date", F.weekofyear("date"))
+weekDates = firstInput.withColumn("week", F.weekofyear("date"))
+
+weekDates = weekDates.withColumn("year", F.year("date"))
 
 # total averages per week
-grouped = weekDates.groupBy("date")
+grouped = weekDates.groupBy("year", "week")
 totalWeekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 totalWeekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
-#totalWeekAverages.show(10)
-#totalWeekStdDeviations.show(10)
+totalWeekAverages.show(10)
+print("total")
+totalWeekStdDeviations.show(10)
+print("total")
+
+#export csv for plots
+# mein plot soll zeigen:
+#   pro stoff 1 plot
+#   pro jahr 1 linie in dem plot
+#   für jede woche von linie zu linie
+#   erstmal total, nicht pro station
+# also will ich ne .csv haben, die zeigt:
+#   year | week | avg(item)für alle items
+#totalWeekAverages.repartition(1).write.csv("total_week_averages.csv")
 
 # averages per station per week
-grouped = weekDates.groupBy("date","station")
-weekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
-weekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
+#grouped = weekDates.groupBy("date","station") #!ändere "date" zu "week" und "year"
+#weekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+#weekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
 #weekAverages.show(8)
+#print("per station")
 #weekStdDeviations.show(8)
+#print("per station")
+
 
 
 #################################################################################################
@@ -223,16 +240,16 @@ grouped = dailyProgression.groupBy("hour")
 totalHourAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 totalHourStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
-totalHourAverages.show(24)
-totalHourStdDeviations.show(24)
+#totalHourAverages.show(24)
+#totalHourStdDeviations.show(24)
 
 # averages per station per week
 grouped = dailyProgression.groupBy("hour", "station")
 hourAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 hourStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
-hourAverages.show(24)
-hourStdDeviations.show(24)
+#hourAverages.show(24)
+#hourStdDeviations.show(24)
 
 dailyProgression.unpersist()
 
@@ -273,8 +290,8 @@ windDF = windDF.withColumn("date", F.to_timestamp("date"))
 # we need hourly values
 windDF = windDF.filter(windDF.measurementPeriod == "H")
 
-windDF.show(4)
-windDF.describe().show()
+#windDF.show(4)
+#windDF.describe().show()
 
 # beide dataframes in 1 dataframe packen
 joined_data = quality.join(windDF, "date").persist()
