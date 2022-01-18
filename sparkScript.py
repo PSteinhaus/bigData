@@ -236,6 +236,8 @@ stationAverages = stationGrouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 def q_percentage(qualityDF, item_name):
 	# filter out null quality levels
 	qualityDF = qualityDF.filter(F.col(item_name+"_quality").isNotNull())
+	# also filter out null item values
+	qualityDF = qualityDF.filter(F.col(item_name).isNotNull())
 	
 	# count of datapoints per station
 	datapointCount = qualityDF.groupBy("station").count().withColumnRenamed("count", "totalCount")
@@ -254,19 +256,19 @@ def q_percentage(qualityDF, item_name):
 	# keep latitude and longitude for easier visualization later
 	return qLevelPercentages.select("station", "latitude", "longitude", item_name+"_quality", "percentage");
 
-#SO2percentages = q_percentage(quality, "SO2")
-#NO2percentages = q_percentage(quality, "NO2")
-#O3percentages = q_percentage(quality, "O3")
-#COpercentages = q_percentage(quality, "CO")
-#PM10percentages = q_percentage(quality, "PM10")
-#PM2_5percentages = q_percentage(quality, "PM2_5")
+SO2percentages = q_percentage(quality, "SO2")
+NO2percentages = q_percentage(quality, "NO2")
+O3percentages = q_percentage(quality, "O3")
+COpercentages = q_percentage(quality, "CO")
+PM10percentages = q_percentage(quality, "PM10")
+PM2_5percentages = q_percentage(quality, "PM2_5")
 
-#SO2percentages.repartition(1).write.csv("SO2_level_percentages_cleaned.csv")
-#NO2percentages.repartition(1).write.csv("NO2_level_percentages_cleaned.csv")
-#O3percentages.repartition(1).write.csv("O3_level_percentages_cleaned.csv")
-#COpercentages.repartition(1).write.csv("CO_level_percentages_cleaned.csv")
-#PM10percentages.repartition(1).write.csv("PM10_level_percentages_cleaned.csv")
-#PM2_5percentages.repartition(1).write.csv("PM2_5_level_percentages_cleaned.csv")
+SO2percentages.repartition(1).write.csv("SO2_level_percentages_cleaned.csv")
+NO2percentages.repartition(1).write.csv("NO2_level_percentages_cleaned.csv")
+O3percentages.repartition(1).write.csv("O3_level_percentages_cleaned.csv")
+COpercentages.repartition(1).write.csv("CO_level_percentages_cleaned.csv")
+PM10percentages.repartition(1).write.csv("PM10_level_percentages_cleaned.csv")
+PM2_5percentages.repartition(1).write.csv("PM2_5_level_percentages_cleaned.csv")
 
 #PM10percentages.show(3)
 
