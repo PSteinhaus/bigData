@@ -234,12 +234,15 @@ stationAverages = stationGrouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 #################################################################################################
 
 def q_percentage(qualityDF, item_name):
+	# filter out null quality levels
+	qualityDF = qualityDF.filter(F.col(item_name+"_quality").isNotNull())
+	
 	# count of datapoints per station
 	datapointCount = qualityDF.groupBy("station").count().withColumnRenamed("count", "totalCount")
 
 	# count of datapoints with a certain quality level, per station
 	qLevelCount = qualityDF.groupBy(item_name+"_quality", "station", "latitude", "longitude").count()
-	
+		
 	# join them to make the next operation possible
 	qLevelCount = qLevelCount.join(datapointCount, "station")
 	
@@ -275,14 +278,13 @@ def q_percentage(qualityDF, item_name):
 ################
 
 # add column for hours
-dailyProgression = quality.withColumn("hour", F.hour("date")).persist()
-#dailyProgression.show(10)
+dailyProgression = quality.withColumn("hour", F.hour("date"))
 
-# pre-selection: select a certain year:
-#dailyProgression = dailyProgression.filter(F.year("date") == 2017)
+dailyProgression = dailyProgression.withColumn("year", F.year("date"))
+dailyProgression.persist()
 
 # total averages per week
-grouped = dailyProgression.groupBy("hour")
+grouped = dailyProgression.groupBy("year", "hour")
 totalHourAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 totalHourStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
@@ -290,7 +292,7 @@ totalHourStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" :
 #totalHourStdDeviations.show(24)
 
 # averages per station per week
-grouped = dailyProgression.groupBy("hour", "station")
+grouped = dailyProgression.groupBy("year", "hour", "station")
 hourAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 hourStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
@@ -306,7 +308,7 @@ dailyProgression.unpersist()
 #   fÃ¼r jede woche von linie zu linie
 #   erstmal total, nicht pro station
 # also will ich ne .csv haben, die zeigt:
-#   year | week | avg(item)fÃ¼r alle items
+#   year | hour | avg(item)fÃ¼r alle items
 #totalHourAverages.repartition(1).write.csv("total_hour_averages_cleaned.csv")
 
 
