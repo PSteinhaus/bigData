@@ -115,7 +115,6 @@ quality = calc_quality(quality, infoDF, "CO")
 quality = calc_quality(quality, infoDF, "PM10")
 quality = calc_quality(quality, infoDF, "PM2_5")
 
-
 ##########################################################################################
 # Bonus Analysis: show me the values that lie in quality level 4 (worse than "very bad") #
 ##########################################################################################
@@ -135,7 +134,14 @@ horrible = quality.filter(F.col("PM10_quality") == 4)
 # Result: quality level 4 seem to be measurement errors for Particulate Matter (PM), but might be legitimate for the other items (there are only a couple of such datapoints for each item though, so they don't matter really)
 #         -> therefore we set the values that lie in level 4 to null for PM
 quality = quality.withColumn("PM2_5", F.expr("""IF(PM2_5_quality == 4, NULL, PM2_5)"""))
-quality = quality.withColumn("PM10", F.expr("""IF(PM10_quality == 4, NULL, PM10)""")).persist()
+quality = quality.withColumn("PM10", F.expr("""IF(PM10_quality == 4, NULL, PM10)"""))
+# NOW also remove these levels for the other items as they really seem to be mostly measurement errors
+quality = quality.withColumn("NO2", F.expr("""IF(NO2_quality == 4, NULL, NO2)"""))
+quality = quality.withColumn("SO2", F.expr("""IF(SO2_quality == 4, NULL, SO2)"""))
+quality = quality.withColumn("O3", F.expr("""IF(O3_quality == 4, NULL, O3)"""))
+quality = quality.withColumn("CO", F.expr("""IF(CO_quality == 4, NULL, CO)"""))
+quality.persist()
+
 
 #quality.describe().show()
 
@@ -156,9 +162,9 @@ grouped = weekDates.groupBy("year", "week")
 totalWeekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 totalWeekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
-totalWeekAverages.show(10)
+#totalWeekAverages.show(10)
 print("total")
-totalWeekStdDeviations.show(10)
+#totalWeekStdDeviations.show(10)
 print("total")
 
 #export csv for plots
@@ -169,7 +175,7 @@ print("total")
 #   erstmal total, nicht pro station
 # also will ich ne .csv haben, die zeigt:
 #   year | week | avg(item)fÃ¼r alle items
-#totalWeekAverages.repartition(1).write.csv("total_week_averages.csv")
+#totalWeekAverages.repartition(1).write.csv("total_week_averages_cleaned.csv")
 
 # averages per station per week
 #grouped = weekDates.groupBy("date","station") #!Ã¤ndere "date" zu "week" und "year"
@@ -198,9 +204,9 @@ grouped = dayDates.groupBy("year", "day")
 totalDayAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 totalDayStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
-totalDayAverages.show(10)
+#totalDayAverages.show(10)
 print("total")
-totalDayStdDeviations.show(10)
+#totalDayStdDeviations.show(10)
 print("total")
 
 #export csv for plots
@@ -210,8 +216,8 @@ print("total")
 #   fÃ¼r jede woche von linie zu linie
 #   erstmal total, nicht pro station
 # also will ich ne .csv haben, die zeigt:
-#   year | week | avg(item)fÃ¼r alle items
-totalDayAverages.repartition(1).write.csv("total_day_averages.csv")
+#   year | day | avg(item)fÃ¼r alle items
+#totalDayAverages.repartition(1).write.csv("total_day_averages_cleaned.csv")
 
 
 ##############################
@@ -220,13 +226,13 @@ totalDayAverages.repartition(1).write.csv("total_day_averages.csv")
 
 stationGrouped = quality.groupBy("station")
 stationAverages = stationGrouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
-stationAverages.repartition(1).write.csv("station_averages.csv")
+#stationAverages.repartition(1).write.csv("station_averages_cleaned.csv")
 
 
 #################################################################################################
 # Third Analysis: percentage of time spent in each quality level per measured item, per station #
 #################################################################################################
-"""
+
 def q_percentage(qualityDF, item_name):
 	# count of datapoints per station
 	datapointCount = qualityDF.groupBy("station").count().withColumnRenamed("count", "totalCount")
@@ -245,22 +251,22 @@ def q_percentage(qualityDF, item_name):
 	# keep latitude and longitude for easier visualization later
 	return qLevelPercentages.select("station", "latitude", "longitude", item_name+"_quality", "percentage");
 
-SO2percentages = q_percentage(quality, "SO2")
-NO2percentages = q_percentage(quality, "NO2")
-O3percentages = q_percentage(quality, "O3")
-COpercentages = q_percentage(quality, "CO")
-PM10percentages = q_percentage(quality, "PM10")
-PM2_5percentages = q_percentage(quality, "PM2_5")
+#SO2percentages = q_percentage(quality, "SO2")
+#NO2percentages = q_percentage(quality, "NO2")
+#O3percentages = q_percentage(quality, "O3")
+#COpercentages = q_percentage(quality, "CO")
+#PM10percentages = q_percentage(quality, "PM10")
+#PM2_5percentages = q_percentage(quality, "PM2_5")
 
-#SO2percentages.write.csv("SO2_level_percentages.csv")
-#NO2percentages.write.csv("NO2_level_percentages.csv")
-#O3percentages.write.csv("O3_level_percentages.csv")
-#COpercentages.write.csv("CO_level_percentages.csv")
-#PM10percentages.write.csv("PM10_level_percentages.csv")
-#PM2_5percentages.write.csv("PM2_5_level_percentages.csv")
+#SO2percentages.repartition(1).write.csv("SO2_level_percentages_cleaned.csv")
+#NO2percentages.repartition(1).write.csv("NO2_level_percentages_cleaned.csv")
+#O3percentages.repartition(1).write.csv("O3_level_percentages_cleaned.csv")
+#COpercentages.repartition(1).write.csv("CO_level_percentages_cleaned.csv")
+#PM10percentages.repartition(1).write.csv("PM10_level_percentages_cleaned.csv")
+#PM2_5percentages.repartition(1).write.csv("PM2_5_level_percentages_cleaned.csv")
 
-PM10percentages.show(3)
-"""
+#PM10percentages.show(3)
+
 
 
 
@@ -293,6 +299,16 @@ hourStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "std
 
 dailyProgression.unpersist()
 
+#export csv for plots
+# mein plot soll zeigen:
+#   pro stoff 1 plot
+#   pro jahr 1 linie in dem plot
+#   fÃ¼r jede woche von linie zu linie
+#   erstmal total, nicht pro station
+# also will ich ne .csv haben, die zeigt:
+#   year | week | avg(item)fÃ¼r alle items
+#totalHourAverages.repartition(1).write.csv("total_hour_averages_cleaned.csv")
+
 
 ########
 # WIND #
@@ -300,8 +316,8 @@ dailyProgression.unpersist()
 
 # read wind data
 
-windData = sc.textFile("WindData.csv", minPartitions=repartition_count)
-windData = windData.mapPartitionsWithIndex(lambda i, iter: islice(iter, 5, None) if i == 0 else iter)
+windData = sc.textFile("WindDataOriginal.csv", minPartitions=repartition_count)
+windData = windData.mapPartitionsWithIndex(lambda i, iter: islice(iter, 1, None) if i == 0 else iter)
 
 windData = windData.map(lambda x: x.split(','))
 windData = windData.map(lambda x: (x[1], x[2], int(x[3]), int(x[4]), int(x[5]), int(x[6])))
@@ -330,7 +346,7 @@ windDF = windDF.withColumn("date", F.to_timestamp("date"))
 # we need hourly values
 windDF = windDF.filter(windDF.measurementPeriod == "H")
 
-#windDF.show(4)
+windDF.show(4)
 #windDF.describe().show()
 
 # beide dataframes in 1 dataframe packen
@@ -341,16 +357,16 @@ joined_data = quality.join(windDF, "date").persist()
 
 # calculate the correlation between average wind speed and pollutant concentration
 
-#SO2_corr = joined_data.stat.corr("averageInstWindSpeed", "SO2")
-#NO2_corr = joined_data.stat.corr("averageInstWindSpeed", "NO2")
-#CO_corr = joined_data.stat.corr("averageInstWindSpeed", "CO")
-#O3_corr = joined_data.stat.corr("averageInstWindSpeed", "O3")
-#PM2_5_corr = joined_data.stat.corr("averageInstWindSpeed", "PM2_5")
-#PM10_corr = joined_data.stat.corr("averageInstWindSpeed", "PM10")
+SO2_corr = joined_data.stat.corr("averageInstWindSpeed", "SO2")
+NO2_corr = joined_data.stat.corr("averageInstWindSpeed", "NO2")
+CO_corr = joined_data.stat.corr("averageInstWindSpeed", "CO")
+O3_corr = joined_data.stat.corr("averageInstWindSpeed", "O3")
+PM2_5_corr = joined_data.stat.corr("averageInstWindSpeed", "PM2_5")
+PM10_corr = joined_data.stat.corr("averageInstWindSpeed", "PM10")
 
-#print("SO2_corr: " + str(SO2_corr))
-#print("NO2_corr: " + str(NO2_corr))
-#print("CO_corr: " + str(CO_corr))
-#print("O3_corr: " + str(O3_corr))
-#print("PM2_5_corr: " + str(PM2_5_corr))
-#print("PM10_corr: " + str(PM10_corr))
+print("SO2_corr: " + str(SO2_corr))
+print("NO2_corr: " + str(NO2_corr))
+print("CO_corr: " + str(CO_corr))
+print("O3_corr: " + str(O3_corr))
+print("PM2_5_corr: " + str(PM2_5_corr))
+print("PM10_corr: " + str(PM10_corr))
