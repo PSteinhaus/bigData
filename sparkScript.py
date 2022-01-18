@@ -16,7 +16,7 @@ from itertools import islice
 confCluster = SparkConf().setAppName("Seoul_Pollution_Cluster")
 confCluster.set("spark.executor.memory", "8g")
 confCluster.set("spark.executor.cores", "4")
-repartition_count = 32
+repartition_count = 16
 sc = SparkContext(conf=confCluster)
 sqlContext = SQLContext(sc)
 
@@ -165,14 +165,14 @@ print("total")
 # mein plot soll zeigen:
 #   pro stoff 1 plot
 #   pro jahr 1 linie in dem plot
-#   für jede woche von linie zu linie
+#   fÃ¼r jede woche von linie zu linie
 #   erstmal total, nicht pro station
 # also will ich ne .csv haben, die zeigt:
-#   year | week | avg(item)für alle items
+#   year | week | avg(item)fÃ¼r alle items
 #totalWeekAverages.repartition(1).write.csv("total_week_averages.csv")
 
 # averages per station per week
-#grouped = weekDates.groupBy("date","station") #!ändere "date" zu "week" und "year"
+#grouped = weekDates.groupBy("date","station") #!Ã¤ndere "date" zu "week" und "year"
 #weekAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
 #weekStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
 
@@ -181,6 +181,46 @@ print("total")
 #weekStdDeviations.show(8)
 #print("per station")
 
+
+##########################
+# average values per day #
+##########################
+
+# preselection: select a certain year:
+firstInput = quality #.filter(F.year("date") == 2017)
+
+dayDates = firstInput.withColumn("day", F.dayofyear("date"))
+
+dayDates = dayDates.withColumn("year", F.year("date"))
+
+# total averages per day
+grouped = dayDates.groupBy("year", "day")
+totalDayAverages = grouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+totalDayStdDeviations = grouped.agg({"SO2" : "stddev", "NO2" : "stddev", "O3" : "stddev", "CO" : "stddev", "PM10" : "stddev", "PM2_5": "stddev"})
+
+totalDayAverages.show(10)
+print("total")
+totalDayStdDeviations.show(10)
+print("total")
+
+#export csv for plots
+# mein plot soll zeigen:
+#   pro stoff 1 plot
+#   pro jahr 1 linie in dem plot
+#   fÃ¼r jede woche von linie zu linie
+#   erstmal total, nicht pro station
+# also will ich ne .csv haben, die zeigt:
+#   year | week | avg(item)fÃ¼r alle items
+totalDayAverages.repartition(1).write.csv("total_day_averages.csv")
+
+
+##############################
+# average values per station #
+##############################
+
+stationGrouped = quality.groupBy("station")
+stationAverages = stationGrouped.avg("SO2", "NO2", "O3", "CO", "PM10", "PM2_5")
+stationAverages.repartition(1).write.csv("station_averages.csv")
 
 
 #################################################################################################
